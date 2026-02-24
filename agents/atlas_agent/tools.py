@@ -10,12 +10,17 @@ from google.genai import types
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv())
 
-google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-gmaps_client = (
-    googlemaps.Client(key=google_maps_api_key)
-    if google_maps_api_key
-    else None
-)
+def _get_required_env(*keys: str) -> str:
+    """Return first present env var value, otherwise raise a clear error."""
+    for key in keys:
+        value = os.getenv(key)
+        if value:
+            return value
+
+    formatted_keys = ", ".join(keys)
+    raise RuntimeError(
+        f"Missing API credentials. Set one of: {formatted_keys}."
+    )
 
 def _google_maps_denied_hint(error_message: str) -> str:
     """Return actionable hints for common Google Maps auth/config errors."""
@@ -33,6 +38,17 @@ def _google_maps_denied_hint(error_message: str) -> str:
 
     return ""
 
+google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+gmaps_client = (
+    googlemaps.Client(key=google_maps_api_key)
+    if google_maps_api_key
+    else None
+)
+
+genai_client = genai.Client(
+    api_key=_get_required_env("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+    http_options=types.HttpOptions(api_version="v1"),
+)
 
 def get_weather_condition(code: int) -> str:
     """Map weather code to human-readable condition.
@@ -177,3 +193,48 @@ def get_place_location(place_name: str) -> dict[str, str]:
             "status": "error",
             "message": message
         }
+
+def get_place_details(query_prompt: str, latitude: float, longitude: float, model_name: Optional[str]= "gemini-2.5-flash") -> dict[str, Any]:
+    """Get place details using Google Maps Tool in Gemini.
+
+    Args:
+        query_prompt: The prompt to search for.
+        latitude: The latitude of the location.
+        longitude: The longitude of the location.
+        model_name: The name of the model to use.
+
+    Returns:
+        A dictionary with the status of the operation and the result.
+        If successful, the result contains the place details.
+    """
+
+    try:
+        response = genai_client.models.generate_content(
+            model=model_name,
+            contents=query_prompt,
+            config=types.GenerateContentConfig(            
+                tools=[
+                    types.Tool(google_maps=types.GoogleMaps(
+                        enable_widget=False
+                    ))
+                ],
+                tool_config=types.ToolConfig(
+                    retrieval_config=types.RetrievalConfig(
+                        lat_lng=types.LatLng(
+                            latitude=latitude,
+                            longitude=longitude
+                        ),
+                        language_code="en_US"
+                    )
+                )
+            )          
+        )
+        return {
+            "status": "success",
+            "result": response.text
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        } 

@@ -1,6 +1,6 @@
 from google.adk.agents.llm_agent import Agent
 from google.adk.tools.preload_memory_tool import PreloadMemoryTool
-from .tools import get_weather, get_place_location
+from .tools import get_weather, get_place_location, get_place_details
 
 agent_instructions = """
 You are a helpful assistant designed to answer user questions and provide useful information, 
@@ -28,7 +28,8 @@ root_agent = Agent(
 
         # Direct tool integration example
         get_weather,
-        get_place_location
+        get_place_location,
+        get_place_details
 
     ]
 )
