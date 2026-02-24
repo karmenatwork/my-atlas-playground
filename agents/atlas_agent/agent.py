@@ -1,6 +1,6 @@
 from google.adk.agents.llm_agent import Agent
 from google.adk.tools.preload_memory_tool import PreloadMemoryTool
-from .tools import get_weather
+from .tools import get_weather, get_place_location
 
 agent_instructions = """
 You are a helpful assistant designed to answer user questions and provide useful information, 
@@ -13,6 +13,8 @@ Behavior Guidelines:
 
 Tool Usage:
 - get_weather: Retrieve the current weather information for a specified location.
+- get_place_location: Obtain the precise latitude and longitude of a specified place.
+
 
 Always choose the most appropriate tool to fulfill the user's request, and respond clearly and concisely.
 """
@@ -25,7 +27,8 @@ root_agent = Agent(
         PreloadMemoryTool(),
 
         # Direct tool integration example
-        get_weather
+        get_weather,
+        get_place_location
 
     ]
 )

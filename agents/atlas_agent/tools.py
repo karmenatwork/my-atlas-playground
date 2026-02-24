@@ -10,6 +10,30 @@ from google.genai import types
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv())
 
+google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+gmaps_client = (
+    googlemaps.Client(key=google_maps_api_key)
+    if google_maps_api_key
+    else None
+)
+
+def _google_maps_denied_hint(error_message: str) -> str:
+    """Return actionable hints for common Google Maps auth/config errors."""
+    text = error_message.upper()
+
+    if "REQUEST_DENIED" in text:
+        return (
+            "Google Maps request was denied. Verify this exact API key's project has "
+            "Geocoding API enabled, billing enabled, and key restrictions allow "
+            "Geocoding API."
+        )
+
+    if "API KEY" in text and "INVALID" in text:
+        return "Google Maps API key looks invalid. Double-check GOOGLE_MAPS_API_KEY value."
+
+    return ""
+
+
 def get_weather_condition(code: int) -> str:
     """Map weather code to human-readable condition.
 
@@ -112,3 +136,44 @@ async def get_weather(location: str) -> dict:
             "message": str(e)
         }
     
+def get_place_location(place_name: str) -> dict[str, str]:
+    """Get coordinates from an address using Google Maps API.
+
+    Args:
+        place_name: The name of the place to get coordinates for.
+
+    Returns:
+        A dictionary with the status of the operation and the result.
+        If successful, the resul contains the latitude and longitude.
+    """    
+    if gmaps_client is None:
+        return {
+            "status": "error",
+            "message": "Missing API credentials. Set GOOGLE_MAPS_API_KEY."
+        }
+
+    try:
+        geocode_result = gmaps_client.geocode(place_name)
+        if geocode_result is None:
+            return {
+                "status": "error",
+                "message": f"Could not find coordinates for address: {place_name}"
+            }
+
+        location = geocode_result[0]["geometry"]["location"]
+        lat = location["lat"]
+        lng = location["lng"]
+        return {
+            "status": "success",
+            "result": {"latitude": lat, "longitude": lng}
+        }
+
+    except Exception as e:
+        hint = _google_maps_denied_hint(str(e))
+        message = str(e)
+        if hint:
+            message = f"{message} | Hint: {hint}"
+        return {
+            "status": "error",
+            "message": message
+        }
