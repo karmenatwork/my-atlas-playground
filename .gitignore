@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# ADK local runtime state
+.adk/
+
+# Environment variables / secrets
+.env
+.env.*
+*.env
