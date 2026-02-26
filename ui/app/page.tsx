@@ -13,6 +13,7 @@ import WeatherCard, {
   getThemeColor,
   WeatherToolResult,
 } from "@/componentes/WeatherCard";
+import GoogleMap from "@/componentes/GoogleMap";
 import { AgentState } from "@/lib/types";
 import AgentDebugger from "@/componentes/AgentDebugger";
 
@@ -62,7 +63,8 @@ export default function CopilotKitPage() {
       {
         name: "themeColor",
         type: "string",
-        description: "Theme color value (e.g. green, #22c55e, linear-gradient(...)).",
+        description:
+          "Theme color value (e.g. green, #22c55e, linear-gradient(...)).",
         required: true,
       },
     ],
@@ -100,6 +102,10 @@ export default function CopilotKitPage() {
             message: "Get the weather in San Francisco.",
           },
           {
+            title: "Where is the SF Moma?",
+            message: "Get me the location of the SF Moma.",
+          },
+          {
             title: "Change color theme",
             message: "Set the theme to green.",
           },
@@ -121,17 +127,22 @@ export default function CopilotKitPage() {
   );
 }
 
+// WeatherResultBridge
+// PURPOSE: Syncs weather tool response data into app state without duplicates
+// BENEFIT: Prevents re-rendering the same weather result multiple times
+// USAGE: Called when get_weather tool completes, triggers handleWeatherResult callback
+
 type PendingWeatherResult = {
-  location: string;
+  locationName: string;
   weather: WeatherToolResult;
 };
 
 function WeatherResultBridge({
-  location,
+  locationName,
   weather,
   onResult,
 }: {
-  location: string;
+  locationName: string;
   weather: WeatherToolResult;
   onResult: (result: PendingWeatherResult) => void;
 }) {
@@ -139,7 +150,7 @@ function WeatherResultBridge({
 
   useEffect(() => {
     onResult({
-      location,
+      locationName,
       weather: {
         temperature,
         conditions,
@@ -149,7 +160,7 @@ function WeatherResultBridge({
       },
     });
   }, [
-    location,
+    locationName,
     temperature,
     conditions,
     humidity,
@@ -161,11 +172,46 @@ function WeatherResultBridge({
   return null;
 }
 
+// LocationResultBridge
+// PURPOSE: Syncs location tool response data (lat/long) into app state
+// BENEFIT: Centralizes location data handling, keeps tool render logic clean
+// USAGE: Called when get_place_location tool completes, triggers handlePlaceLocationResult callback
+
+type PendingLocationResult = {
+  placeName: string;
+  latitude: number;
+  longitude: number;
+};
+
+// LocationResultBridge
+function LocationResultBridge({
+  placeName,
+  latitude,
+  longitude,
+  onResult,
+}: {
+  placeName: string;
+  latitude: number;
+  longitude: number;
+  onResult: (result: PendingLocationResult) => void;
+}) {
+  useEffect(() => {
+    onResult({
+      placeName,
+      latitude,
+      longitude,
+    });
+  }, [placeName, latitude, longitude, onResult]);
+
+  return null;
+}
+
 function MainContent({ themeColor }: { themeColor: string }) {
   const initialAgentState: AgentState = {
     latestResult: null,
-    latestLocation: null,
+    latestLocationName: null,
     latestWeather: null,
+    latestLocationData: null,
     history: [],
   };
 
@@ -180,19 +226,27 @@ function MainContent({ themeColor }: { themeColor: string }) {
 
   const handleWeatherResult = useCallback(
     (pendingWeatherResult: PendingWeatherResult) => {
-      const signature = `${pendingWeatherResult.location}|${pendingWeatherResult.weather.temperature}|${pendingWeatherResult.weather.conditions}|${pendingWeatherResult.weather.humidity}|${pendingWeatherResult.weather.windSpeed}|${pendingWeatherResult.weather.feelsLike}`;
+      const signature = `${pendingWeatherResult.locationName}|
+        ${pendingWeatherResult.weather.temperature}|
+        ${pendingWeatherResult.weather.conditions}|
+        ${pendingWeatherResult.weather.humidity}|
+        ${pendingWeatherResult.weather.windSpeed}|
+        ${pendingWeatherResult.weather.feelsLike}`;
+
       if (seenResultSignatures.current.has(signature)) {
         return;
       }
 
       seenResultSignatures.current.add(signature);
 
-      const summary = `Weather in ${pendingWeatherResult.location}: ${pendingWeatherResult.weather.temperature}, ${pendingWeatherResult.weather.conditions}.`;
+      const summary = `Weather in ${pendingWeatherResult.locationName}: 
+        ${pendingWeatherResult.weather.temperature}, 
+        ${pendingWeatherResult.weather.conditions}.`;
 
       setLocalAgentState((previousState) => ({
         ...previousState,
         latestResult: summary,
-        latestLocation: pendingWeatherResult.location,
+        latestLocationName: pendingWeatherResult.locationName,
         latestWeather: pendingWeatherResult.weather,
         history: [summary, ...(previousState.history || [])].slice(0, 8),
       }));
@@ -204,7 +258,7 @@ function MainContent({ themeColor }: { themeColor: string }) {
     {
       name: "get_weather",
       description: "Get the weather for a given location.",
-      parameters: [{ name: "location", type: "string", required: true }],
+      parameters: [{ name: "location_name", type: "string", required: true }],
       render: ({ args, status, result: toolResponse }) => {
         if (status === "inProgress") {
           return (
@@ -231,12 +285,12 @@ function MainContent({ themeColor }: { themeColor: string }) {
           return (
             <>
               <WeatherResultBridge
-                location={args.location}
+                locationName={args.location_name}
                 weather={weatherResult}
                 onResult={handleWeatherResult}
               />
               <WeatherCard
-                location={args.location}
+                location={args.location_name}
                 themeColor={weatherThemeColor}
                 result={weatherResult}
                 status={status || "complete"}
@@ -250,6 +304,87 @@ function MainContent({ themeColor }: { themeColor: string }) {
     },
     [],
   );
+
+  const handlePlaceLocationResult = useCallback(
+    (locationData: PendingLocationResult) => {
+      const signature = `${locationData.placeName} | ${locationData.longitude} | ${locationData.latitude}`
+
+      if (seenResultSignatures.current.has(signature)) {
+        return;
+      }
+
+      seenResultSignatures.current.add(signature)
+      
+      const summary = `Location of ${locationData.placeName}: ${locationData.latitude}°, ${locationData.longitude}°`;
+      console.log('seenResultSignatures', seenResultSignatures)
+
+      setLocalAgentState((previousState) => ({
+        ...previousState,
+        latestResult: summary,
+        latestLocationData: {
+          placeName: locationData.placeName,
+          lat: locationData.latitude,
+          lng: locationData.longitude,
+          address: locationData.placeName,
+        },
+        history: [summary, ...(previousState.history || [])].slice(0, 8),
+      }));
+    },
+    [],
+  );
+
+  /* --------------------------------------------------------------------------------------------
+   * RENDER PLACE LOCATION TOOL CALL
+   * This visually renders the result of the get_place_location tool.
+   * ------------------------------------------------------------------------------------------
+   */
+
+  useRenderToolCall({
+    name: "get_place_location",
+    description: "get the latitude and longitude of a place given its name.",
+    available: "disabled",
+    parameters: [{ name: "place_name", type: "string", required: true }],
+    render: ({ args, status, result }) => {
+      if (status === "inProgress") {
+        return (
+          <div className="bg-[#667eea] text-white p-4 rounded-lg max-w-md">
+            <span className="animate-spin">⚙️ Retrieving location...</span>
+          </div>
+        );
+      }
+
+      console.log(result);
+      if (status === "complete" && result) {
+        const { result: coords } = result;
+        console.log("Place Location Result:", coords);
+
+        if (
+          typeof coords?.latitude !== "number" ||
+          typeof coords?.longitude !== "number"
+        ) {
+          return (
+            <div className="bg-red-300 text-red-900 p-4 rounded-lg max-w-md">
+              <strong>⚠️ Error:</strong> Unable to retrieve location data.
+            </div>
+          );
+        }
+
+        return (
+          <>
+            <LocationResultBridge
+              placeName={args.place_name}
+              latitude={coords?.latitude.toFixed(4)}
+              longitude={coords?.longitude.toFixed(4)}
+              onResult={handlePlaceLocationResult}
+            />
+            ;
+            <GoogleMap lat={coords?.latitude} lng={coords?.longitude} />;
+          </>
+        );
+      }
+      return null;
+    },
+  });
 
   const hasSharedHistory =
     Array.isArray(state.history) && state.history.length > 0;

@@ -6,9 +6,16 @@ export type AgentWeatherResult = {
   feelsLike: number;
 };
 
+export type AgentLocationData = {
+  lat: number;
+  lng: number;
+  address: string;
+};
+
 export type AgentState = {
   latestResult: string | null;
-  latestLocation: string | null;
+  latestLocationName: string | null;
   latestWeather: AgentWeatherResult | null;
+  latestLocationData: AgentLocationData | null;
   history: string[];
 };
