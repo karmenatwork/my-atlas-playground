@@ -91,7 +91,7 @@ def get_weather_condition(code: int) -> str:
     }
     return conditions.get(code, "Unknown")
 
-async def get_weather(location: str) -> dict:
+async def get_weather(location_name: str) -> dict:
     """Get the weather for a given location.
 
     Args:
@@ -106,14 +106,14 @@ async def get_weather(location: str) -> dict:
         async with httpx.AsyncClient() as client:
             # Geocode the location
             geocoding_url = (
-                f"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1"
+                f"https://geocoding-api.open-meteo.com/v1/search?name={location_name}&count=1"
             )
 
             geocoding_response = await client.get(geocoding_url)
             geocoding_data = geocoding_response.json()
 
             if not geocoding_data.get("results"):
-                raise ValueError(f"Location '{location}' not found")
+                raise ValueError(f"Location '{location_name}' not found")
 
             result = geocoding_data["results"][0]
             latitude = result["latitude"]
@@ -179,6 +179,9 @@ def get_place_location(place_name: str) -> dict[str, str]:
         location = geocode_result[0]["geometry"]["location"]
         lat = location["lat"]
         lng = location["lng"]
+        
+        print(f"Geocode Result: {location} ")
+
         return {
             "status": "success",
             "result": {"latitude": lat, "longitude": lng}
