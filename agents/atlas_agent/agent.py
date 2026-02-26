@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any
 
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.llm_agent import Agent
 from google.adk.models import LlmResponse, LlmRequest
 from google.adk.tools import BaseTool, ToolContext
@@ -19,6 +20,11 @@ Tool Usage:
 - get_weather: Retrieve the current weather information for a specified location.
 - get_place_location: Obtain the precise latitude and longitude of a specified place.
 - get_place_details: Fetch detailed information about a place using its geographic coordinates.
+- change_background (frontend action): Change the UI background using a CSS background string.
+
+Frontend Action Rule:
+- If the user asks to change the theme, color, or background, call change_background with the background parameter.
+- Do not refuse this request when the frontend action is available.
 
 Always choose the most appropriate tool to fulfill the user's request, and respond clearly and concisely.
 """
