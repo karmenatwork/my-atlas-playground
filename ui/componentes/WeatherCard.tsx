@@ -33,8 +33,6 @@ function getThemeColor(conditions: string): string {
   return "#764ba2";
 }
 
-
-
 function WeatherCard({
   location,
   themeColor,
