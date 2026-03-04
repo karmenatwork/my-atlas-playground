@@ -10,6 +10,8 @@ import AgentDebugger from "@/componentes/AgentDebugger";
 
 import { useWeatherTool } from "@/componentes/weather/useWeatherTool";
 import type { PendingWeatherResult } from "@/componentes/weather/types";
+import type { PendingLocationResult } from "@/componentes/location/types";
+import { useLocationTool } from "@/componentes/location/useLocationTool";
 
 export default function CopilotKitPage() {
   const searchParams = useSearchParams();
@@ -138,6 +140,13 @@ function MainContent({ themeColor }: { themeColor: string }) {
   const [localAgentState, setLocalAgentState] =
     useState<AgentState>(initialAgentState);
 
+  const getNextHistory = useCallback(
+    (summary: string, currentHistory: string[]) => {
+      return [summary, ...currentHistory.filter((item) => item !== summary)].slice(0, 8);
+    },
+    [],
+  );
+
   const updateWeatherState = useCallback(
     (summary: string, pending: PendingWeatherResult) => {
       console.log("🟢 updateWeatherState called with:", summary);
@@ -160,17 +169,34 @@ function MainContent({ themeColor }: { themeColor: string }) {
         latestResult: summary,
         latestLocationName: pending.locationName,
         latestWeather: { ...pending.weather },
-        history: [summary, ...(previousState.history || [])].slice(0, 8),
+        history: getNextHistory(summary, previousState.history || []),
       }));
     },
-    [],
+    [getNextHistory],
   );
   useWeatherTool({ onResult: updateWeatherState });
 
-  // const hasSharedHistory =
-  //   Array.isArray(state.history) && state.history.length > 0;
-  // const activeState =
-  //   state.latestResult || hasSharedHistory ? state : localAgentState;
+  const updateLocationState = useCallback(
+    (summary: string, pending: PendingLocationResult) => {
+      console.log("🟢 updateLocationState called with:", summary);
+
+      setLocalAgentState((previousState) => ({
+        ...previousState,
+        latestResult: summary,
+        latestLocationName: pending.placeName,
+        latestLocationData: {
+          lat: pending.latitude,
+          lng: pending.longitude,
+          address: pending.placeName,
+        },
+        history: getNextHistory(summary, previousState.history || []),
+      }));
+    },
+    [getNextHistory],
+  );
+
+  useLocationTool({ onResult: updateLocationState });
+
   const hasLocalHistory =
     Array.isArray(localAgentState.history) &&
     localAgentState.history.length > 0;
@@ -193,7 +219,7 @@ function ConversationResultCard({ state }: { state: AgentState }) {
     <div className="w-full max-w-2xl rounded-xl bg-white/90 p-6 shadow-sm">
       <h2 className="text-xl font-semibold text-slate-900">Agent Result</h2>
       <p className="mt-2 text-sm text-slate-600">
-        Ask the assistant for weather (example: “Get the weather in San
+        Ask the assistant for weather or location (example: “Get the weather in San
         Francisco”). The latest result appears here.
       </p>
 
